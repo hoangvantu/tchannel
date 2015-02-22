@@ -30,6 +30,7 @@ var net = require('net');
 var format = require('util').format;
 var inspect = require('util').inspect;
 var hexer = require('hexer');
+var errSer = require('./lib/error_serial');
 
 function TChannel(options) {
     if (!(this instanceof TChannel)) {
@@ -680,7 +681,7 @@ TChannelConnection.prototype.errorForCode = function errorForCode(code, message)
         return null;
     }
 
-    var passedError = new Error(message);
+    var passedError = errSer.deserialize(message);
     if (code === v2.CallResponse.Codes.AppException) {
         return passedError;
     }
@@ -838,18 +839,12 @@ TChannelServerOp.prototype.buildResponseFrame = function buildResponseFrame(err,
     var arg1 = self.reqFrame.body.arg1;
     if (err) {
         code = v2.CallResponse.Codes.AppException;
-        arg1 = isError(err) ? err.message : JSON.stringify(err); // TODO: better
+        arg1 = errSer.serialize(err);
     }
     var resBody = v2.CallResponse(code, self.headers, arg1, res1, res2, csum);
     var resFrame = v2.Frame(id, 0, resBody);
     return resFrame;
 };
-
-function isError(obj) {
-    return typeof obj === 'object' && (
-        Object.prototype.toString.call(obj) === '[object Error]' ||
-        obj instanceof Error);
-}
 
 function TChannelClientOp(options, frame, start, callback) {
     var self = this;

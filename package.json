@@ -20,7 +20,10 @@
     "crc": "^3.2.1",
     "error": "^5.0.0",
     "farmhash": "^0.2.0",
-    "hexer": "^1.0.1"
+    "hexer": "^1.0.1",
+    "json-stringify-safe": "^5.0.0",
+    "safe-json-parse": "^2.0.0",
+    "xtend": "^4.0.0"
   },
   "devDependencies": {
     "debug-logtron": "^2.0.0",
