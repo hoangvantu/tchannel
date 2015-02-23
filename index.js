@@ -29,6 +29,7 @@ var globalRandom = Math.random;
 var net = require('net');
 var format = require('util').format;
 var inspect = require('util').inspect;
+var hexer = require('hexer');
 
 function TChannel(options) {
     if (!(this instanceof TChannel)) {
@@ -401,7 +402,12 @@ require('util').inherits(TChannelConnection, require('events').EventEmitter);
 
 TChannelConnection.prototype.onParserError = function onParserError(err) {
     var self = this;
-    self.channel.logger.error('tchannel parse error', {
+    var mess = 'tchannel parse error';
+    if (err.buffer) {
+        mess += '\n' + hexer(err.buffer);
+        delete err.buffer;
+    }
+    self.channel.logger.error(mess, {
         remoteName: self.remoteName,
         localName: self.channel.hostPort,
         error: err
