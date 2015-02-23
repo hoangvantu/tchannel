@@ -136,8 +136,17 @@ TChannel.prototype.setPeer = function setPeer(hostPort, conn) {
     }
 
     if (conn.direction === 'out') {
+        self.logger.debug('set out peer', {
+            hostPort: self.hostPort,
+            peerHostPort: hostPort,
+            count: list.length
+        });
         list.unshift(conn);
     } else {
+        self.logger.debug('set in peer', {
+            hostPort: hostPort,
+            count: list.length
+        });
         list.push(conn);
     }
     return conn;
@@ -146,7 +155,14 @@ TChannel.prototype.setPeer = function setPeer(hostPort, conn) {
 TChannel.prototype.getPeer = function getPeer(hostPort) {
     var self = this;
     var list = self.peers[hostPort];
-    return list && list[0] ? list[0] : null;
+    var peer = list && list[0] ? list[0] : null;
+    self.logger.debug('get peer attempt', {
+        hostPort: self.hostPort,
+        dest: hostPort,
+        count: list ? list.length : 0,
+        hasPeer: Boolean(peer)
+    });
+    return peer;
 };
 
 TChannel.prototype.removePeer = function removePeer(hostPort, conn) {
@@ -202,7 +218,8 @@ TChannel.prototype.addPeer = function addPeer(hostPort, connection) {
     self.logger.debug('alloc peer', {
         source: self.hostPort,
         destination: hostPort,
-        direction: connection.direction
+        direction: connection.direction,
+        stack: (new Error()).stack.split(/\n/)
         // TODO: more log context
     });
     connection.once('reset', function onConnectionReset(/* err */) {
@@ -228,8 +245,11 @@ TChannel.prototype.send = function send(options, arg1, arg2, arg3, callback) {
     }
 
     var reqBody = self.buildRequest(options, arg1, arg2, arg3);
+    self.logger.debug('PRE get out conn');
     var peer = self.getOutConnection(dest);
+    self.logger.debug('POST get out conn');
     peer.send(reqBody, callback);
+    self.logger.debug('POST send');
 };
 /* jshint maxparams:4 */
 
@@ -573,7 +593,13 @@ TChannelConnection.prototype.onSocketErr = function onSocketErr(err) {
 
 TChannelConnection.prototype.onFrame = function onFrame(frame) {
     var self = this;
-
+    self.logger.debug('onFrame', {
+        hostPort: self.channel.hostPort,
+        dest: self.remoteAddr,
+        remoteName: self.remoteName,
+        direction: self.direction,
+        frame: frame
+    });
     self.lastTimeoutTime = 0;
     switch (frame.body.type) {
         case v2.Types.InitRequest:
@@ -603,6 +629,11 @@ TChannelConnection.prototype.handleCallRequest = function handleCallRequest(reqF
     var id = reqFrame.id;
     var name = reqFrame.body.arg1;
     var handler = self.channel.endpoints[name];
+    self.logger.debug('handleReqFrame', {
+        hostPort: self.channel.hostPort,
+        opId: id,
+        arg1: name
+    });
 
     if (typeof handler !== 'function') {
         // TODO: test this behavior, in fact the prior early return subtlety
@@ -649,6 +680,11 @@ TChannelConnection.prototype.handleCallRequest = function handleCallRequest(reqF
             var buf = resFrame.toBuffer();
             self.socket.write(buf);
         }
+        self.logger.debug('sendFrame', {
+            hostPort: self.channel.hostPort,
+            closing: self.closing,
+            opId: id
+        });
     }
 };
 
@@ -730,6 +766,10 @@ TChannelConnection.prototype.sendInitRequest = function sendInitRequest() {
     var body = v2.InitRequest(v2.VERSION, self.channel.hostPort, self.channel.processName);
     var frame = v2.Frame(id, 0, body);
     var buffer = frame.toBuffer();
+    self.logger.debug('sending init request', {
+        hostPort: self.channel.hostPort,
+        remoteAddr: self.remoteAddr
+    });
     self.socket.write(buffer);
 };
 
@@ -739,6 +779,10 @@ TChannelConnection.prototype.sendInitResponse = function sendInitResponse() {
     var body = v2.InitResponse(v2.VERSION, self.channel.hostPort, self.channel.processName);
     var frame = v2.Frame(id, 0, body);
     var buffer = frame.toBuffer();
+    self.logger.debug('sending init response', {
+        hostPort: self.channel.hostPort,
+        remoteAddr: self.remoteAddr
+    });
     self.socket.write(buffer);
 };
 
@@ -753,6 +797,10 @@ TChannelConnection.prototype.handleInitRequest = function handleInitRequest(reqF
     self.remoteName = hostPort;
     // TODO: use processName
     self.channel.addPeer(hostPort, self);
+    self.logger.debug('got init request', {
+        hostPort: self.channel.hostPort,
+        remoteHostPort: hostPort
+    });
     self.channel.emit('identified', hostPort, processName);
     self.sendInitResponse();
 };
@@ -767,6 +815,10 @@ TChannelConnection.prototype.handleInitResponse = function handleInitResponse(re
     var processName = resFrame.body.processName;
     // TODO: use processName
     self.remoteName = hostPort;
+    self.logger.debug('got init response', {
+        hostPort: self.channel.hostPort,
+        remoteHostPort: hostPort
+    });
     self.channel.emit('identified', hostPort, processName);
 };
 
