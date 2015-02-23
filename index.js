@@ -229,7 +229,7 @@ TChannel.prototype.send = function send(options, arg1, arg2, arg3, callback) {
 
     var reqBody = self.buildRequest(options, arg1, arg2, arg3);
     var peer = self.getOutConnection(dest);
-    peer.send(options, reqBody, callback);
+    peer.send(reqBody, callback);
 };
 /* jshint maxparams:4 */
 
@@ -500,7 +500,7 @@ TChannelConnection.prototype.checkOutOpsForTimeout = function checkOutOpsForTime
                 });
             continue;
         }
-        var timeout = op.timeout || op.options.timeout || self.channel.reqTimeoutDefault;
+        var timeout = op.timeout || self.channel.reqTimeoutDefault;
         var duration = now - op.start;
         if (duration > timeout) {
             delete ops[opKey];
@@ -632,7 +632,7 @@ TChannelConnection.prototype.handleCallRequest = function handleCallRequest(reqF
 
     self.inPending++;
     var op = self.inOps[id] = new TChannelServerOp(self,
-        handler, reqFrame, self.channel.now(), {}, sendFrame);
+        handler, reqFrame, self.channel.now(), sendFrame);
 
     function sendFrame(resFrame) {
         if (self.inOps[id] !== op) {
@@ -772,7 +772,7 @@ TChannelConnection.prototype.handleInitResponse = function handleInitResponse(re
 
 // send a req frame
 /* jshint maxparams:5 */
-TChannelConnection.prototype.send = function send(options, reqBody, callback) {
+TChannelConnection.prototype.send = function send(reqBody, callback) {
     var self = this;
     var id = self.nextFrameId();
     // TODO: use this to protect against >4Mi outstanding messages edge case
@@ -784,7 +784,7 @@ TChannelConnection.prototype.send = function send(options, reqBody, callback) {
 
     var reqFrame = v2.Frame(id, 0, reqBody);
     self.outOps[id] = new TChannelClientOp(
-        options, reqFrame, self.channel.now(), callback);
+        reqFrame, self.channel.now(), callback);
     self.pendingCount++;
     var buffer = reqFrame.toBuffer();
     return self.socket.write(buffer);
@@ -792,7 +792,7 @@ TChannelConnection.prototype.send = function send(options, reqBody, callback) {
 /* jshint maxparams:4 */
 
 /* jshint maxparams:6 */
-function TChannelServerOp(connection, handler, reqFrame, start, options, sendFrame) {
+function TChannelServerOp(connection, handler, reqFrame, start, sendFrame) {
     var self = this;
     self.connection = connection;
     self.logger = connection.logger;
@@ -801,7 +801,6 @@ function TChannelServerOp(connection, handler, reqFrame, start, options, sendFra
     self.timedOut = false;
     self.timeout = reqFrame.body.ttl; // TODO: provide defalut?
     self.start = start;
-    self.options = options;
     self.headers = {};
     self.checksumType = reqFrame.body.csum.type;
     self.sendFrame = sendFrame;
@@ -846,9 +845,8 @@ TChannelServerOp.prototype.buildResponseFrame = function buildResponseFrame(err,
     return resFrame;
 };
 
-function TChannelClientOp(options, frame, start, callback) {
+function TChannelClientOp(frame, start, callback) {
     var self = this;
-    self.options = options;
     self.frame = frame;
     self.callback = callback;
     self.start = start;
