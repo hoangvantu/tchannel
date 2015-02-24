@@ -340,8 +340,6 @@ function TChannelConnection(channel, socket, direction, remoteAddr) {
     self.outOps = Object.create(null);
     self.outPending = 0;
 
-    self.localEndpoints = Object.create(null);
-
     self.lastSentFrameId = 0;
     self.lastTimeoutTime = 0;
     self.closing = false;
@@ -372,10 +370,6 @@ function TChannelConnection(channel, socket, direction, remoteAddr) {
             self.onParserError(err);
         }
     });
-
-    self.localEndpoints['TChannel identify'] = function identifyEndpoint(arg1, arg2, hostInfo, cb) {
-        cb(null, self.channel.hostPort, null);
-    };
 
     if (direction === 'out') {
         self.sendInitRequest(function onOutIdentify(err, res1/*, res2 */) {
@@ -609,7 +603,14 @@ TChannelConnection.prototype.handleCallRequest = function handleCallRequest(reqF
     var id = reqFrame.header.id;
     var name = reqFrame.arg1.toString();
 
-    var handler = self.localEndpoints[name] || self.channel.endpoints[name];
+    var handler;
+    if (name === 'TChannel identify') {
+        handler = function identifyEndpoint(arg1, arg2, hostInfo, cb) {
+            cb(null, self.channel.hostPort, null);
+        };
+    } else {
+        handler = self.channel.endpoints[name];
+    }
 
     if (typeof handler !== 'function') {
         // TODO: test this behavior, in fact the prior early return subtlety
@@ -628,7 +629,7 @@ TChannelConnection.prototype.handleCallRequest = function handleCallRequest(reqF
         });
 
         return;
-    } else if (self.channel.endpoints[name]) {
+    } else {
         self.channel.emit('endpoint', {
             name: name
         });
