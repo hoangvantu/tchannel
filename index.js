@@ -596,21 +596,20 @@ TChannelConnection.prototype.onFrame = function onFrame(frame) {
 
 TChannelConnection.prototype.handleCallRequest = function handleCallRequest(reqFrame) {
     var self = this;
-    if (self.remoteName === null && self.handleInitRequest(reqFrame) === false) {
-        return;
-    }
-
     var id = reqFrame.header.id;
     var name = reqFrame.arg1.toString();
 
-    var handler;
-    if (name === 'TChannel identify') {
-        handler = function identifyEndpoint(arg1, arg2, hostInfo, cb) {
-            cb(null, self.channel.hostPort, null);
-        };
-    } else {
-        handler = self.channel.endpoints[name];
+    if (self.remoteName === null) {
+        // TODO reset
+        return;
     }
+
+    if (name === 'TChannel identify') {
+        self.handleInitRequest(reqFrame);
+        return;
+    }
+
+    var handler = self.channel.endpoints[name];
 
     if (typeof handler !== 'function') {
         // TODO: test this behavior, in fact the prior early return subtlety
@@ -695,17 +694,26 @@ TChannelConnection.prototype.sendInitRequest = function sendInitRequest(callback
     self.send({}, reqFrame, callback);
 };
 
+TChannelConnection.prototype.sendInitResponse = function sendInitResponse(reqFrame) {
+    var self = this;
+    var id = self.reqFrame.header.id;
+    var arg1 = self.reqFrame.arg1;
+    var resFrame = new v1.Frame();
+    resFrame.header.id = id;
+    resFrame.header.seq = 0;
+    resFrame.set(arg1, self.channel.hostPort, null);
+    resFrame.header.type = v1.Types.resCompleteMessage;
+    var buf = resFrame.toBuffer();
+    self.socket.write(buf);
+};
+
 TChannelConnection.prototype.handleInitRequest = function handleInitRequest(reqFrame) {
     var self = this;
-    if (reqFrame.arg1.toString() !== 'TChannel identify') {
-        self.logger.error('first req on socket must be identify');
-        return false;
-    }
     var hostPort = reqFrame.arg2.toString();
     self.remoteName = hostPort;
     self.channel.addPeer(hostPort, self);
     self.channel.emit('identified', hostPort);
-    return true;
+    self.sendInitResponse(reqFrame);
 };
 
 TChannelConnection.prototype.handleInitResponse = function handleInitResponse(res) {
