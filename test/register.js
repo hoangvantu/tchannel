@@ -23,6 +23,7 @@
 var parallel = require('run-parallel');
 var Buffer = require('buffer').Buffer;
 var allocCluster = require('./lib/alloc-cluster.js');
+var emptyBuffer = Buffer(0);
 
 allocCluster.test('register() with different results', 2, function t(cluster, assert) {
     var one = cluster.channels[0];
@@ -109,8 +110,8 @@ allocCluster.test('register() with different results', 2, function t(cluster, as
         var errorCall = results.errorCall;
         assert.ok(errorCall.err);
         assert.equal(errorCall.err.message, 'abc');
-        assert.equal(errorCall.head, null);
-        assert.equal(errorCall.body, null);
+        assert.deepEqual(errorCall.head, emptyBuffer);
+        assert.deepEqual(errorCall.body, emptyBuffer);
 
         var bufferHead = results.bufferHead;
         assert.equal(bufferHead.err, null);

@@ -32,7 +32,7 @@ allocCluster.test('emits endpoint event', 2, {
     one.register('/hello', function hello(arg1, arg2, hi, cb) {
         assert.deepEqual(endpoints, [
             {
-                name: '/hello'
+                name: Buffer('/hello')
             }
         ]);
         cb(null, '', 'hello');
@@ -54,7 +54,7 @@ allocCluster.test('emits endpoint event', 2, {
 
         assert.deepEqual(endpoints, [
             {
-                name: '/hello'
+                name: Buffer('/hello')
             }
         ]);
 
