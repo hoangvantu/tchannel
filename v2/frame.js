@@ -99,4 +99,9 @@ Frame.prototype.write = function writeFrame() {
     ]);
 };
 
+Frame.prototype.toBuffer = function toBuffer() {
+    var self = this;
+    return self.write().create();
+};
+
 Frame.Types = {};
