@@ -248,7 +248,19 @@ The `err` must always be an `Error`.
 The `res1` is the head to return to the client
 The `res2` is the body to return to the client.
 
-`TChannel` will format the head (res1) and body (res2) for you
+The `err` object is serialized in a recoverable form, e.g.:
+
+```json
+{
+    "$jsError": {
+        "name": "Error",
+        "message": "something went wrong",
+        "stack": "..."
+    }
+}
+```
+
+The `res1`, and `res2` values are mapped to a byte buffer:
 
  - If you pass a `Buffer` it uses the buffer.
  - If you pass a `String` it will cast it to a buffer.
@@ -277,7 +289,7 @@ send: (
 `send()` is used for a channel to send an outgoing message
     to another channel.
 
-`TChannel` will format the head (arg2) and body (arg3) for you
+The `arg1`, `arg2`, and `arg3` values are mapped to a byte buffer:
 
  - If you pass a `Buffer` it uses the buffer.
  - If you pass a `String` it will cast it to a buffer.
