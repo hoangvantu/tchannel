@@ -372,16 +372,7 @@ function TChannelConnection(channel, socket, direction, remoteAddr) {
     });
 
     if (direction === 'out') {
-        self.sendInitRequest(function onOutIdentify(err, res1/*, res2 */) {
-            if (err) {
-                self.channel.logger.error('identification error', {
-                    remoteAddr: remoteAddr,
-                    error: err
-                });
-                return;
-            }
-            self.handleInitResponse(res1.toString());
-        });
+        self.sendInitRequest();
     }
 
     self.startTimeoutTimer();
@@ -661,6 +652,12 @@ TChannelConnection.prototype.handleCallResponse = function handleCallResponse(re
         self.resetAll(new Error('call response before init response')); // TODO typed error
         return;
     }
+
+    if (String(resFrame.arg1) === 'TChannel identify') {
+        self.handleInitResponse(resFrame);
+        return;
+    }
+
     var id = resFrame.header.id;
     var arg2 = resFrame.arg2;
     var arg3 = resFrame.arg3;
@@ -724,13 +721,13 @@ TChannelConnection.prototype.handleInitRequest = function handleInitRequest(reqF
     self.sendInitResponse(reqFrame);
 };
 
-TChannelConnection.prototype.handleInitResponse = function handleInitResponse(res) {
+TChannelConnection.prototype.handleInitResponse = function handleInitResponse(resFrame) {
     var self = this;
     if (self.remoteName !== null) {
         self.resetAll(new Error('duplicate init response')); // TODO typed error
         return;
     }
-    var remote = res;
+    var remote = resFrame.arg2.toString();
     self.remoteName = remote;
     self.channel.emit('identified', remote);
 };
