@@ -600,7 +600,7 @@ TChannelConnection.prototype.handleCallRequest = function handleCallRequest(reqF
     var name = reqFrame.arg1.toString();
 
     if (self.remoteName === null) {
-        // TODO reset
+        self.resetAll(new Error('call request before init request')); // TODO typed error
         return;
     }
 
@@ -657,6 +657,10 @@ TChannelConnection.prototype.handleCallRequest = function handleCallRequest(reqF
 
 TChannelConnection.prototype.handleCallResponse = function handleCallResponse(resFrame) {
     var self = this;
+    if (self.remoteName === null) {
+        self.resetAll(new Error('call response before init response')); // TODO typed error
+        return;
+    }
     var id = resFrame.header.id;
     var arg2 = resFrame.arg2;
     var arg3 = resFrame.arg3;
@@ -709,6 +713,10 @@ TChannelConnection.prototype.sendInitResponse = function sendInitResponse(reqFra
 
 TChannelConnection.prototype.handleInitRequest = function handleInitRequest(reqFrame) {
     var self = this;
+    if (self.remoteName !== null) {
+        self.resetAll(new Error('duplicate init request')); // TODO typed error
+        return;
+    }
     var hostPort = reqFrame.arg2.toString();
     self.remoteName = hostPort;
     self.channel.addPeer(hostPort, self);
@@ -718,6 +726,10 @@ TChannelConnection.prototype.handleInitRequest = function handleInitRequest(reqF
 
 TChannelConnection.prototype.handleInitResponse = function handleInitResponse(res) {
     var self = this;
+    if (self.remoteName !== null) {
+        self.resetAll(new Error('duplicate init response')); // TODO typed error
+        return;
+    }
     var remote = res;
     self.remoteName = remote;
     self.channel.emit('identified', remote);
