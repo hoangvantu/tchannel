@@ -44,9 +44,9 @@ function CallRequest(ttl, tracing, service, headers, arg1, arg2, arg3, csum) {
     self.tracing = tracing || emptyTracing;
     self.service = service || emptyBuffer;
     self.headers = headers;
-    self.arg1 = arg1 || emptyBuffer;
-    self.arg2 = arg2 || emptyBuffer;
-    self.arg3 = arg3 || emptyBuffer;
+    self.arg1 = arg1 ? write.bufferOrString(arg1) : emptyBuffer;
+    self.arg2 = arg2 ? write.bufferOrString(arg2) : emptyBuffer;
+    self.arg3 = arg3 ? write.bufferOrString(arg3) : emptyBuffer;
     self.csum = csum;
 }
 
@@ -80,18 +80,15 @@ CallRequest.read = read.chained(read.series([
 // ttl:4 tracing:24 service~2 nh:1 (hk~1 hv~1){nh} arg1~2 arg2~2 arg3~2 csumtype:1 (csum:4){0,1}
 CallRequest.prototype.write = function writeCallReq() {
     var self = this;
-    var arg1 = write.bufferOrString(self.arg1, 'CallRequest arg1');
-    var arg2 = write.bufferOrString(self.arg2, 'CallRequest arg2');
-    var arg3 = write.bufferOrString(self.arg3, 'CallRequest arg3');
-    self.csum.update(arg1, arg2, arg3);
+    self.csum.update(self.arg1, self.arg2, self.arg3);
     return write.series([
         write.UInt32BE(self.ttl, 'CallRequest ttl'),          // ttl:4
         write.fixed(24, self.tracing, 'CallRequest tracing'), // tracing:24
         write.buf2(self.service, 'CallRequest service'),      // service~2
         header.write(self.headers),                           // nh:1 (hk~1 hv~1){nh}
-        write.buf2(arg1, 'CallRequest arg1'),                 // arg1~2
-        write.buf2(arg2, 'CallRequest arg2'),                 // arg2~2
-        write.buf2(arg3, 'CallRequest arg3'),                 // arg3~2
+        write.buf2(self.arg1, 'CallRequest arg1'),            // arg1~2
+        write.buf2(self.arg2, 'CallRequest arg2'),            // arg2~2
+        write.buf2(self.arg3, 'CallRequest arg3'),            // arg3~2
         self.csum.write()                                     // csumtype:1 (csum:4){0,1}
     ]);
 };
@@ -104,9 +101,9 @@ function CallResponse(code, headers, arg1, arg2, arg3, csum) {
     self.type = CallResponse.TypeCode;
     self.code = code;
     self.headers = headers;
-    self.arg1 = arg1 || emptyBuffer;
-    self.arg2 = arg2 || emptyBuffer;
-    self.arg3 = arg3 || emptyBuffer;
+    self.arg1 = arg1 ? write.bufferOrString(arg1) : emptyBuffer;
+    self.arg2 = arg2 ? write.bufferOrString(arg2) : emptyBuffer;
+    self.arg3 = arg3 ? write.bufferOrString(arg3) : emptyBuffer;
     self.csum = csum;
 }
 
@@ -146,16 +143,13 @@ CallResponse.read = read.chained(read.series([
 // code:1 nh:1 (hk~1 hv~1){nh} arg1~2 arg2~2 arg3~2 csumtype:1 (csum:4){0,1}
 CallResponse.prototype.write = function writeCallRes() {
     var self = this;
-    var arg1 = write.bufferOrString(self.arg1, 'CallResponse arg1');
-    var arg2 = write.bufferOrString(self.arg2, 'CallResponse arg2');
-    var arg3 = write.bufferOrString(self.arg3, 'CallResponse arg3');
-    self.csum.update(arg1, arg2, arg3);
+    self.csum.update(self.arg1, self.arg2, self.arg3);
     return write.series([
         write.UInt8(self.code, 'CallResponse code'), // code:1
         header.write(self.headers),                  // nh:1 (hk~1 hv~1){nh}
-        write.buf2(arg1, 'CallResponse arg1'),       // arg1~2
-        write.buf2(arg2, 'CallResponse arg2'),       // arg2~2
-        write.buf2(arg3, 'CallResponse arg3'),       // arg3~2
+        write.buf2(self.arg1, 'CallResponse arg1'),  // arg1~2
+        write.buf2(self.arg2, 'CallResponse arg2'),  // arg2~2
+        write.buf2(self.arg3, 'CallResponse arg3'),  // arg3~2
         self.csum.write()                            // csumtype:1 (csum:4){0,1}
     ]);
 };
