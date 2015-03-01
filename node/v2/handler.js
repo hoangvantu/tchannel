@@ -147,9 +147,13 @@ TChannelV2Handler.prototype.handleCallRequest = function handleCallRequest(reqFr
     };
 
     var res = {
+        flags: 0, // TODO: streaming
+        id: reqFrame.id,
+        arg1: reqFrame.body.arg1,
         headers: {},
+        checksum: reqFrame.body.csum.type,
         send: function sendResponseFrame(err, res1, res2) {
-            self.sendResponseFrame(reqFrame, response.headers, err, res1, res2);
+            self.sendResponseFrame(req, res, err, res1, res2);
         }
     };
 
@@ -250,22 +254,21 @@ TChannelV2Handler.prototype.sendRequestFrame = function sendRequestFrame(options
     return id;
 };
 
-TChannelV2Handler.prototype.sendResponseFrame = function sendResponseFrame(reqFrame, headers, err, res1, res2) {
+TChannelV2Handler.prototype.sendResponseFrame = function sendResponseFrame(req, res, err, res1, res2) {
     // TODO: refactor this all the way back out through the op handler calling convention
     var self = this;
-    var id = reqFrame.id;
-    var flags = 0; // TODO: streaming
-    var arg1 = reqFrame.body.arg1;
-    var tracing = reqFrame.body.tracing;
-    var checksumType = reqFrame.body.csum.type;
     var resBody;
     if (err) {
         var errArg = isError(err) ? err.message : JSON.stringify(err); // TODO: better
-        resBody = v2.CallResponse(flags, v2.CallResponse.Codes.Error, tracing, headers, checksumType, arg1, res1, errArg);
+        resBody = v2.CallResponse(
+            res.flags, v2.CallResponse.Codes.Error, req.tracing,
+            res.headers, res.checksum, res.arg1, res1, errArg);
     } else {
-        resBody = v2.CallResponse(flags, v2.CallResponse.Codes.OK, tracing, headers, checksumType, arg1, res1, res2);
+        resBody = v2.CallResponse(
+            res.flags, v2.CallResponse.Codes.OK, req.tracing,
+            res.headers, res.checksum, res.arg1, res1, res2);
     }
-    var resFrame = v2.Frame(id, resBody);
+    var resFrame = v2.Frame(res.id, resBody);
     self.push(resFrame);
 };
 /* jshint maxparams:4 */
