@@ -52,11 +52,6 @@ function TChannelV2Handler(channel, options) {
         objectMode: true
     });
     self.channel = channel;
-    // TODO: may be better suited to pull out an operation collection
-    // abstraction and then encapsulate through that rather than this
-    // run/complete approach
-    self.runInOp = options.runInOp;
-    self.completeOutOp = options.completeOutOp;
     self.remoteHostPort = null; // filled in by identify message
     self.lastSentFrameId = 0;
 }
@@ -157,8 +152,7 @@ TChannelV2Handler.prototype.handleCallRequest = function handleCallRequest(reqFr
         }
     };
 
-    var handler = self.channel.getEndpointHandler(req.name);
-    self.runInOp(handler, req, response.send);
+    self.emit('call.request', req, res);
     callback();
 };
 
@@ -167,20 +161,19 @@ TChannelV2Handler.prototype.handleCallResponse = function handleCallResponse(res
     if (self.remoteHostPort === null) {
         return callback(new Error('call response before init response')); // TODO typed error
     }
-    var id = resFrame.id;
-    var code = resFrame.body.code;
-    var arg1 = resFrame.body.arg1;
-    var arg2 = resFrame.body.arg2;
-    var arg3 = resFrame.body.arg3;
-    if (code === v2.CallResponse.Codes.OK) {
-        self.completeOutOp(null, id, arg2, arg3);
+
+    // TODO: factor out an object prototype for this
+    var res = {
+        id: resFrame.id,
+        code: resFrame.body.code,
+        arg1: resFrame.body.arg1,
+        arg2: resFrame.body.arg2,
+        arg3: resFrame.body.arg3
+    };
+    if (res.code === v2.CallResponse.Codes.OK) {
+        self.emit('call.response', null, res);
     } else {
-        self.completeOutOp(TChannelApplicationError({
-            code: code,
-            arg1: arg1,
-            arg2: arg2,
-            arg3: arg3
-        }), id, arg2, null);
+        self.emit('call.response', TChannelApplicationError(res), null);
     }
     callback();
 };
@@ -198,7 +191,7 @@ TChannelV2Handler.prototype.handleError = function handleError(errFrame, callbac
         // fatal error not associated with a prior frame
         callback(err);
     } else {
-        self.completeOutOp(err, id, null, null);
+        self.emit('call.response', err, null);
         callback();
     }
 };
