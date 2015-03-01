@@ -130,28 +130,31 @@ TChannelV2Handler.prototype.handleInitResponse = function handleInitResponse(res
 
 TChannelV2Handler.prototype.handleCallRequest = function handleCallRequest(reqFrame, callback) {
     var self = this;
-    var id = reqFrame.id;
-    var name = String(reqFrame.body.arg1);
-
     if (self.remoteHostPort === null) {
         return callback(new Error('call request before init request')); // TODO typed error
     }
 
-    var handler = self.channel.getEndpointHandler(name);
-    var responseHeaders = {};
-
-    self.runInOp(handler, {
-        id: id,
+    // TODO: factor out proper object prototypes for req & res
+    var req = {
+        id: reqFrame.id,
         tracing: reqFrame.tracing,
         service: reqFrame.service,
+        name: String(reqFrame.body.arg1),
         requestHeaders: reqFrame.headers,
         arg1: reqFrame.body.arg1,
         arg2: reqFrame.body.arg2,
-        arg3: reqFrame.body.arg3,
-        responseHeaders: responseHeaders
-    }, function sendResponseFrame(err, res1, res2) {
-        self.sendResponseFrame(reqFrame, responseHeaders, err, res1, res2);
-    });
+        arg3: reqFrame.body.arg3
+    };
+
+    var res = {
+        headers: {},
+        send: function sendResponseFrame(err, res1, res2) {
+            self.sendResponseFrame(reqFrame, response.headers, err, res1, res2);
+        }
+    };
+
+    var handler = self.channel.getEndpointHandler(req.name);
+    self.runInOp(handler, req, response.send);
     callback();
 };
 
