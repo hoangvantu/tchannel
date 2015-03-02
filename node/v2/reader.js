@@ -24,17 +24,19 @@ var TypedError = require('error/typed');
 var inherits = require('util').inherits;
 var Transform = require('stream').Transform;
 var ParseBuffer = require('./parse_buffer');
+var bufrw = require('bufrw');
+
+var ZeroLengthFrameError = TypedError({
+    type: 'tchannel.zero-length-frame',
+    message: 'zero length frame encountered'
+});
 
 var BrokenReaderStateError = TypedError({
     type: 'tchannel.broken-reader-state',
-    message: 'reader in invalid state {state}',
-    state: null
-});
-
-var ShortChunkRead = TypedError({
-    type: 'tchannel.short-chunk-read',
-    message: "didn't consume {remaining} bytes from incomnig chunk buffer",
-    remaining: null
+    message: 'reader in invalid state {state} expecting {expecting} avail {aval}',
+    state: null,
+    expecting: null,
+    avail: null
 });
 
 var TruncatedReadError = TypedError({
@@ -93,16 +95,35 @@ ChunkReader.prototype._transform = function _transform(chunk, encoding, callback
         switch (self.state) {
             case States.PendingLength:
                 self.expecting = self._readLength();
-                self.state = States.Seeking;
+                if (!self.expecting) {
+                    self.emit('error', ZeroLengthFrameError());
+                    self.buffer.shift(self.frameLengthSize);
+                    self.expecting = self.frameLengthSize;
+                    self.state = States.PendingLength;
+                } else {
+                    self.state = States.Seeking;
+                }
                 break;
             case States.Seeking:
                 var frameChunk = self.buffer.shift(self.expecting);
+                if (!frameChunk.length) {
+                    callback(BrokenReaderStateError({
+                        state: self.state,
+                        expecting: self.expecting,
+                        avail: self.buffer.avail()
+                    }));
+                    return;
+                }
                 self.handleFrame(frameChunk);
                 self.expecting = self.frameLengthSize;
                 self.state = States.PendingLength;
                 break;
             default:
-                callback(BrokenReaderStateError({state: self.state}));
+                callback(BrokenReaderStateError({
+                    state: self.state,
+                    expecting: self.expecting,
+                    avail: self.buffer.avail()
+                }));
                 return;
         }
     }
@@ -135,18 +156,11 @@ ChunkReader.prototype.handleFrame = function handleFrame(chunk, callback) {
     if (!callback) {
         callback = emitFrame;
     }
-    var res = self.FrameType.read(chunk, 0);
-    var err = res[0];
-    var end = res[1];
-    var frame = res[2];
-    if (!err && end < chunk.length) {
-        // NOTE redundant with check in Frame.read
-        err = ShortChunkRead({remaining: chunk.length - end});
-    }
+    var tup = bufrw.fromBufferTuple(self.FrameType.struct, chunk);
+    var err = tup[0];
+    var frame = tup[1];
     if (err) {
-        err.offset = end;
-        err.buffer = chunk;
-        callback(err);
+        callback(err, frame);
     } else {
         callback(null, frame);
     }
