@@ -22,7 +22,7 @@
 
 var Frame = require('../../v2/frame.js');
 var TestBody = require('./test_body.js');
-var testRead = require('../lib/read_test.js');
+var testStruct = require('../lib/struct_test.js');
 
 var catBuffer = Buffer([
     0x00, 0x14,             // size:2:
@@ -45,7 +45,7 @@ var dogeBuffer = Buffer([
 ]);
 
 TestBody.testWith('read a cat frame', function t(assert) {
-    testRead(assert, Frame.read, catBuffer, function s(frame, done) {
+    testStruct.read(assert, Frame.struct, catBuffer, function s(frame, done) {
         assert.equal(frame.id, 0x02030405, 'expected frame id');
         assert.equal(String(frame.body.payload), 'cat', 'expected body payload');
         done();
