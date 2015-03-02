@@ -20,8 +20,9 @@
 
 'use strict';
 
+var bufrw = require('bufrw');
 var test = require('tape');
-var testRead = require('../lib/read_test.js');
+var testStruct = require('../lib/struct_test.js');
 var ErrorResponse = require('../../v2/error_response.js');
 
 var testErrorResponse = Buffer([
@@ -33,7 +34,7 @@ var testErrorResponse = Buffer([
 ]);
 
 test('read a ErrorResponse', function t(assert) {
-    testRead(assert, ErrorResponse.read, testErrorResponse, function s(res, done) {
+    testStruct.read(assert, ErrorResponse.struct, testErrorResponse, function s(res, done) {
         assert.equal(res.code, ErrorResponse.Codes.ProtocolError, 'expected code');
         assert.equal(res.id, 0x01020304, 'expected id');
         assert.equal(String(res.message), 'too bad.', 'expected message');
@@ -45,8 +46,10 @@ test('write a ErrorResponse', function t(assert) {
     var res = ErrorResponse(
         ErrorResponse.Codes.ProtocolError,
         0x01020304, 'too bad.');
-    assert.deepEqual(
-        res.write().create(), testErrorResponse,
-        'expected write output');
+    var tup = bufrw.toBufferTuple(ErrorResponse.struct, res);
+    var err = tup[0];
+    var buf = tup[1];
+    assert.ifError(err, 'write should not error');
+    assert.deepEqual(buf, testErrorResponse, 'expected write output');
     assert.end();
 });

@@ -20,14 +20,18 @@
 
 'use strict';
 
+var bufrw = require('bufrw');
 var TypedError = require('error/typed');
-var read = require('../lib/read');
-var write = require('../lib/write');
 var Frame = require('./frame');
 
 module.exports = ErrorResponse;
 
-var emptyBuffer = new Buffer(0);
+var InvalidErrorCodeError = TypedError({
+    type: 'tchannel.invalid-error-code',
+    message: 'invalid tchannel error code {errorCode}',
+    errorCode: null,
+    originalId: null
+});
 
 // TODO: enforce message ID of this frame is Frame.NullId when
 // errorBody.code.ProtocolError = ErrorResponse.Codes.ProtocolError
@@ -38,13 +42,13 @@ function ErrorResponse(code, id, message) {
         return new ErrorResponse(code, id, message);
     }
     var self = this;
-    self.code = code;
+    self.code = code || 0;
     if (id === null || id === undefined) {
         self.id = Frame.NullId;
     } else {
         self.id = id;
     }
-    self.message = message ? write.bufferOrString(message) : emptyBuffer;
+    self.message = message || '';
 }
 
 ErrorResponse.TypeCode = 0xff;
@@ -68,6 +72,16 @@ CodeNames[Codes.Declined] = 'declined';
 CodeNames[Codes.UnexpectedError] = 'unexpected error';
 CodeNames[Codes.BadRequest] = 'bad request';
 CodeNames[Codes.ProtocolError] = 'protocol error';
+
+function validCodeGuard(res) {
+    if (CodeNames[res.code] === undefined) {
+        return InvalidErrorCodeError({
+            errorCode: res.code,
+            originalId: res.ed
+        });
+    }
+    return null;
+}
 
 var CodeErrors = {};
 CodeErrors[Codes.Timeout] = TypedError({
@@ -110,23 +124,12 @@ ErrorResponse.Codes = Codes;
 ErrorResponse.CodeNames = CodeNames;
 ErrorResponse.CodeErrors = CodeErrors;
 
-ErrorResponse.read = read.chained(read.series([
-    read.UInt8,    // code:1
-    read.UInt32BE, // id:4
-    read.buf2      // message~2
-]), function buildErrorRes(results, buffer, offset) {
-    var code = results[0];
-    var id = results[1];
-    var message = results[2];
-    var res = new ErrorResponse(code, id, message);
-    return [null, offset, res];
+ErrorResponse.struct = bufrw.Struct(ErrorResponse, {
+    code: bufrw.UInt8,  // code:1
+    id: bufrw.UInt32BE, // id:4
+    message: bufrw.str2 // message~2
+}, {
+    writeGuard: validCodeGuard,
+    readGuard: validCodeGuard
 });
-
-ErrorResponse.prototype.write = function writeErrorRes() {
-    var self = this;
-    return write.series([
-        write.UInt8(self.code, 'ErrorResponse code'),  // code:1
-        write.UInt32BE(self.id, 'ErrorResponse id'),   // id:4
-        write.buf2(self.message, 'ErrorResponse arg1') // message~2
-    ]);
-};
+// TODO: would be great to verify codes before writing and/or on read
