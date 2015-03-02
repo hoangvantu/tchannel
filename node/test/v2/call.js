@@ -20,8 +20,9 @@
 
 'use strict';
 
+var bufrw = require('bufrw');
 var test = require('tape');
-var testRead = require('../lib/read_test.js');
+var testStruct = require('../lib/struct_test.js');
 var Call = require('../../v2/call.js');
 
 var testCallReq = Buffer([
@@ -54,7 +55,7 @@ var testTracing = Buffer([
 ]);
 
 test('read a Call.Request', function t(assert) {
-    testRead(assert, Call.Request.read, testCallReq, function s(req, done) {
+    testStruct.read(assert, Call.Request.struct, testCallReq, function s(req, done) {
         assert.equal(req.flags, 0, 'expected flags');
         assert.equal(req.ttl, 1024, 'expected ttl');
         assert.deepEqual(req.tracing, testTracing, 'expected tracing data');
@@ -73,9 +74,11 @@ test('write a Call.Request', function t(assert) {
     var req = Call.Request(
         0, 1024, testTracing, 'apache', {key: 'val'},
         0, 'on', 'to', 'te');
-    assert.deepEqual(
-        req.write().create(), testCallReq,
-        'expected write output');
+    var tup = bufrw.toBufferTuple(Call.Request.struct, req);
+    var err = tup[0];
+    var buf = tup[1];
+    assert.ifError(err, 'write should not error');
+    assert.deepEqual(buf, testCallReq, 'expected write output');
     assert.end();
 });
 
@@ -99,7 +102,7 @@ var testCallRes = Buffer([
 ]);
 
 test('read a Call.Response', function t(assert) {
-    testRead(assert, Call.Response.read, testCallRes, function s(res, done) {
+    testStruct.read(assert, Call.Response.struct, testCallRes, function s(res, done) {
         assert.equal(res.flags, 0, 'expected flags');
         assert.equal(res.code, Call.Response.Codes.OK, 'expected code');
         assert.deepEqual(res.tracing, testTracing, 'expected tracing data');
@@ -114,11 +117,13 @@ test('read a Call.Response', function t(assert) {
 });
 
 test('write a Call.Response', function t(assert) {
-    var req = Call.Response(
+    var res = Call.Response(
         0, Call.Response.Codes.OK, testTracing, {key: 'val'},
         0, 'on', 'to', 'te');
-    assert.deepEqual(
-        req.write().create(), testCallRes,
-        'expected write output');
+    var tup = bufrw.toBufferTuple(Call.Response.struct, res);
+    var err = tup[0];
+    var buf = tup[1];
+    assert.ifError(err, 'write should not error');
+    assert.deepEqual(buf, testCallRes, 'expected write output');
     assert.end();
 });
