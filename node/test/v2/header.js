@@ -21,7 +21,8 @@
 'use strict';
 
 var test = require('tape');
-var testRead = require('../lib/read_test.js');
+var bufrw = require('bufrw');
+var testStruct = require('../lib/struct_test.js');
 var Header = require('../../v2/header.js');
 
 var testEmpty = Buffer([
@@ -86,7 +87,7 @@ var testNHTooLarge = Buffer([
 ]);
 
 test('read empty headers', function t(assert) {
-    testRead(assert, Header.read, testEmpty, function s(headers, done) {
+    testStruct.read(assert, Header.header1, testEmpty, function s(headers, done) {
         var keys = Object.keys(headers);
         assert.equal(keys.length, 0, 'expected empty headers');
         done();
@@ -94,7 +95,7 @@ test('read empty headers', function t(assert) {
 });
 
 test('read singeton headers', function t(assert) {
-    testRead(assert, Header.read, testSingle, function s(headers, done) {
+    testStruct.read(assert, Header.header1, testSingle, function s(headers, done) {
         var keys = Object.keys(headers);
         assert.deepEqual(keys, ['key'], 'expected one header');
         assert.equal(headers.key, 'val', 'expected key => val');
@@ -103,7 +104,7 @@ test('read singeton headers', function t(assert) {
 });
 
 test('read three headers', function t(assert) {
-    testRead(assert, Header.read, testThree, function s(headers, done) {
+    testStruct.read(assert, Header.header1, testThree, function s(headers, done) {
         var keys = Object.keys(headers);
         assert.deepEqual(keys, ['red', 'blue', 'magenta'], 'expected one header');
         assert.equal(headers.red, 'green', 'expected red => green');
@@ -114,7 +115,7 @@ test('read three headers', function t(assert) {
 });
 
 test('read duplicate key -> error', function t(assert) {
-    testRead.shouldError(assert, Header.read, dupKeyBuffer, function s(err, done) {
+    testStruct.read.shouldError(assert, Header.header1, dupKeyBuffer, function s(err, done) {
         assert.equal(err.type, 'tchannel.duplicate-header-key', 'expected duplicate key error');
         assert.equal(err.key, 'key');
         assert.equal(err.value, 'VAL');
@@ -124,17 +125,17 @@ test('read duplicate key -> error', function t(assert) {
 });
 
 test('read null key', function t(assert) {
-    testRead.shouldError(assert, Header.read, testNullKey, function s(err, done) {
-        assert.equal(err.type, 'tchannel.null-key', 'expected duplicate key error');
+    testStruct.read.shouldError(assert, Header.header1, testNullKey, function s(err, done) {
+        assert.equal(err.type, 'tchannel.null-key', 'expected null key error');
         // TODO: should be 0x01, but pair already read by time error guard gets
         // a chance
-        assert.equal(err.offset, 0x05, 'expected duplicate key error');
+        assert.equal(err.offset, 0x05, 'expected null key error offset');
         done();
     });
 });
 
 test('read null val', function t(assert) {
-    testRead(assert, Header.read, testNullVal, function s(headers, done) {
+    testStruct.read(assert, Header.header1, testNullVal, function s(headers, done) {
         var keys = Object.keys(headers);
         assert.deepEqual(keys, ['ev'], 'expected one header');
         assert.equal(headers.ev, '', 'expected "ev" => ""');
@@ -143,16 +144,16 @@ test('read null val', function t(assert) {
 });
 
 test('read NH too small', function t(assert) {
-    testRead.shouldError(assert, Header.read, testNHTooSmall, function s(err, done) {
-        assert.equal(err.type, 'short-read', 'expected duplicate key error');
+    testStruct.read.shouldError(assert, Header.header1, testNHTooSmall, function s(err, done) {
+        assert.equal(err.type, 'short-read', 'expected short-read error');
         assert.equal(err.offset, 9, 'expected stopped after first key => val');
         done();
     });
 });
 
 test('read NH too large', function t(assert) {
-    testRead.shouldError(assert, Header.read, testNHTooLarge, function s(err, done) {
-        assert.equal(err.type, 'tchannel.short-buffer', 'expected duplicate key error');
+    testStruct.read.shouldError(assert, Header.header1, testNHTooLarge, function s(err, done) {
+        assert.equal(err.type, 'short-buffer', 'expected short-buffer error');
         assert.equal(err.offset, 17, 'expected failed at end of buffer');
         assert.equal(err.expected, 1, 'expected to be looking for nh:1');
         done();
@@ -161,17 +162,21 @@ test('read NH too large', function t(assert) {
 
 test('write empty headers', function t(assert) {
     var headers = {};
-    assert.deepEqual(
-        Header.write(headers).create(), testEmpty,
-        'expected write output');
+    var tup = bufrw.toBufferTuple(Header.header1, headers);
+    var err = tup[0];
+    var buf = tup[1];
+    assert.ifError(err, 'write should not error');
+    assert.deepEqual(buf, testEmpty, 'expected write output');
     assert.end();
 });
 
 test('write singleton headers', function t(assert) {
     var headers = {key: 'val'};
-    assert.deepEqual(
-        Header.write(headers).create(), testSingle,
-        'expected write output');
+    var tup = bufrw.toBufferTuple(Header.header1, headers);
+    var err = tup[0];
+    var buf = tup[1];
+    assert.ifError(err, 'write should not error');
+    assert.deepEqual(buf, testSingle, 'expected write output');
     assert.end();
 });
 
@@ -181,8 +186,10 @@ test('write three headers', function t(assert) {
         blue: 'yellow',
         magenta: 'cyan'
     };
-    assert.deepEqual(
-        Header.write(headers).create(), testThree,
-        'expected write output');
+    var tup = bufrw.toBufferTuple(Header.header1, headers);
+    var err = tup[0];
+    var buf = tup[1];
+    assert.ifError(err, 'write should not error');
+    assert.deepEqual(buf, testThree, 'expected write output');
     assert.end();
 });
