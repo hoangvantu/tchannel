@@ -21,8 +21,7 @@
 'use strict';
 
 var TypedError = require('error/typed');
-var read = require('../lib/read');
-var write = require('../lib/write');
+var bufrw = require('bufrw');
 var header = require('./header');
 
 module.exports.Request = InitRequest;
@@ -48,39 +47,25 @@ function InitRequest(version, headers) {
 
 InitRequest.TypeCode = 0x01;
 
-function buildInitReqRes(Type, results, buffer, offset) {
-    var version = results[0];
-    var headers = results[1];
-    for (var i = 0; i < RequiredHeaderFields.length; ++i) {
+function requiredFieldGuard(headers) {
+    for (var i = 0; i < RequiredHeaderFields.length; i++) {
         var field = RequiredHeaderFields[i];
         if (headers[field] === undefined) {
-            return [MissingInitHeaderError({field: field}), offset, null];
+            return MissingInitHeaderError({field: field});
         }
     }
-    var req = new Type(version, headers);
-    return [null, offset, req];
+    return null;
 }
 
-InitRequest.read = read.chained(read.series([
-    read.UInt16BE, // version:2
-    header.read2   // nh:2 (hk~2 hv~2){nh}
-]), function buildInitReq(results, buffer, offset) {
-    return buildInitReqRes(InitRequest, results, buffer, offset);
+InitRequest.struct = bufrw.Struct(InitRequest, {
+    version: bufrw.UInt16BE, // version:2
+    headers: header.header2  // nh:2 (hk~2 hv~2){nh}
+}, {
+    writeGuard: requiredFieldGuard,
+    readGuard: requiredFieldGuard
 });
 
-InitRequest.prototype.write = function encode() {
-    var self = this;
-    for (var i = 0; i < RequiredHeaderFields.length; ++i) {
-        var field = RequiredHeaderFields[i];
-        if (self.headers[field] === undefined) {
-            throw MissingInitHeaderError({field: field});
-        }
-    }
-    return write.series([
-        write.UInt16BE(self.version), // version:2
-        header.write2(self.headers)   // nh:2 (hk~2 hv~2){nh}
-    ]);
-};
+// TODO: MissingInitHeaderError check / guard
 
 function InitResponse(version, headers) {
     if (!(this instanceof InitResponse)) {
@@ -91,11 +76,10 @@ function InitResponse(version, headers) {
     self.version = version || 0;
     self.headers = headers || {};
 }
+
 InitResponse.TypeCode = 0x02;
-InitResponse.read = read.chained(read.series([
-    read.UInt16BE, // version:2
-    header.read2   // nh:2 (hk~2 hv~2){nh}
-]), function buildInitReq(results, buffer, offset) {
-    return buildInitReqRes(InitResponse, results, buffer, offset);
+
+InitResponse.struct = bufrw.Struct(InitResponse, {
+    version: bufrw.UInt16BE, // version:2
+    headers: header.header2  // nh:2 (hk~2 hv~2){nh}
 });
-InitResponse.prototype.write = InitRequest.prototype.write;

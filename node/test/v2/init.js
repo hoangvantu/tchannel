@@ -20,8 +20,9 @@
 
 'use strict';
 
+var bufrw = require('bufrw');
 var test = require('tape');
-var testRead = require('../lib/read_test.js');
+var testStruct = require('../lib/struct_test.js');
 var Init = require('../../v2/init.js');
 
 /* jshint camelcase:false */
@@ -49,7 +50,7 @@ var testInitReq = Buffer([
 ]);
 
 test('read a Init.Request', function t(assert) {
-    testRead(assert, Init.Request.read, testInitReq, function s(req, done) {
+    testStruct.read(assert, Init.Request.struct, testInitReq, function s(req, done) {
         assert.equal(req.version, 2, 'expected version');
         assert.equal(req.headers.host_port, '1.2.3.4:5', 'expected hostPort');
         assert.equal(req.headers.process_name, 'node', 'expected processName');
@@ -64,14 +65,16 @@ test('write a Init.Request', function t(assert) {
         process_name: 'node',
         arbitrary: 'value'
     });
-    assert.deepEqual(
-        req.write().create(), testInitReq,
-        'expected write output');
+    var tup = bufrw.toBufferTuple(Init.Request.struct, req);
+    var err = tup[0];
+    var buf = tup[1];
+    assert.ifError(err, 'write should not error');
+    assert.deepEqual(buf, testInitReq, 'expected write output');
     assert.end();
 });
 
 test('read a Init.Response', function t(assert) {
-    testRead(assert, Init.Response.read, testInitReq, function s(res, done) {
+    testStruct.read(assert, Init.Response.struct, testInitReq, function s(res, done) {
         assert.equal(res.version, 2, 'expected version');
         assert.equal(res.headers.host_port, '1.2.3.4:5', 'expected hostPort');
         assert.equal(res.headers.process_name, 'node', 'expected processName');
@@ -86,8 +89,10 @@ test('write a Init.Response', function t(assert) {
         process_name: 'node',
         arbitrary: 'value'
     });
-    assert.deepEqual(
-        res.write().create(), testInitReq,
-        'expected write output');
+    var tup = bufrw.toBufferTuple(Init.Response.struct, res);
+    var err = tup[0];
+    var buf = tup[1];
+    assert.ifError(err, 'write should not error');
+    assert.deepEqual(buf, testInitReq, 'expected write output');
     assert.end();
 });
