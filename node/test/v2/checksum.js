@@ -22,7 +22,8 @@
 
 var test = require('tape');
 var Checksum = require('../../v2/checksum.js');
-var testRead = require('../lib/read_test.js');
+var testStruct = require('../lib/struct_test.js');
+var bufrw = require('bufrw');
 
 var args = ['arg1', 'arg2', 'arg3'];
 var parts = args.map(function mapArg(arg) {return Buffer(arg);});
@@ -43,7 +44,7 @@ var Farm32Buffer = Buffer([
 ]);
 
 test('read and verify none checksum', function t(assert) {
-    testRead(assert, Checksum.read, NoneBuffer, function checkNone(csum, done) {
+    testStruct.read(assert, Checksum.struct, NoneBuffer, function checkNone(csum, done) {
         assert.equal(csum.type, Checksum.Types.None, 'expected type: none');
         var good = csum.verify(parts[0], parts[1], parts[2]);
         assert.equal(good, null, 'none expected to verify parts');
@@ -54,7 +55,7 @@ test('read and verify none checksum', function t(assert) {
 });
 
 test('read and verify crc32 checksum', function t(assert) {
-    testRead(assert, Checksum.read, CRC32Buffer, function checkCRC32(csum, done) {
+    testStruct.read(assert, Checksum.struct, CRC32Buffer, function checkCRC32(csum, done) {
         assert.equal(csum.type, Checksum.Types.CRC32, 'expected type: crc32');
         var good = csum.verify(parts[0], parts[1], parts[2]);
         assert.equal(good, null, 'crc32 expected to verify parts');
@@ -65,7 +66,7 @@ test('read and verify crc32 checksum', function t(assert) {
 });
 
 test('read and verify farmhash32 checksum', function t(assert) {
-    testRead(assert, Checksum.read, Farm32Buffer, function checkFarmHash32(csum, done) {
+    testStruct.read(assert, Checksum.struct, Farm32Buffer, function checkFarmHash32(csum, done) {
         assert.equal(csum.type, Checksum.Types.FarmHash32, 'expected type: farmhash32');
         var good = csum.verify(parts[0], parts[1], parts[2]);
         assert.equal(good, null, 'farmhash32 expected to verify parts');
@@ -77,39 +78,60 @@ test('read and verify farmhash32 checksum', function t(assert) {
 
 test('write correct none checksum', function t(assert) {
     var csum = Checksum(Checksum.Types.None);
+
     csum.update(parts[0], parts[1], parts[2]);
-    assert.deepEqual(
-        csum.write().create(),
-        NoneBuffer, 'none writes correct checksum');
+    var tup = bufrw.toBufferTuple(Checksum.struct, csum);
+    var err = tup[0];
+    var buf = tup[1];
+    assert.ifError(err, 'write should not error');
+    assert.deepEqual(buf, NoneBuffer, 'none writes correct checksum');
+
     csum.update(uparts[0], uparts[1], uparts[2]);
-    assert.deepEqual(
-        csum.write().create(),
-        NoneBuffer, 'none does not care');
+    tup = bufrw.toBufferTuple(Checksum.struct, csum);
+    err = tup[0];
+    buf = tup[1];
+    assert.ifError(err, 'write should not error');
+    assert.deepEqual(buf, NoneBuffer, 'none does not care');
+
     assert.end();
 });
 
 test('write correct crc32 checksum', function t(assert) {
     var csum = Checksum(Checksum.Types.CRC32);
+
     csum.update(parts[0], parts[1], parts[2]);
-    assert.deepEqual(
-        csum.write().create(),
-        CRC32Buffer, 'crc32 writes correct checksum');
+    var tup = bufrw.toBufferTuple(Checksum.struct, csum);
+    var err = tup[0];
+    var buf = tup[1];
+    assert.ifError(err, 'write should not error');
+    assert.deepEqual(buf, CRC32Buffer, 'crc32 writes correct checksum');
+
     csum.update(uparts[0], uparts[1], uparts[2]);
-    assert.notDeepEqual(
-        csum.write().create(),
-        CRC32Buffer, 'crc32 rejects bad data');
+    tup = bufrw.toBufferTuple(Checksum.struct, csum);
+    err = tup[0];
+    buf = tup[1];
+    assert.ifError(err, 'write should not error');
+    assert.notDeepEqual(buf, CRC32Buffer, 'crc32 rejects bad data');
+
     assert.end();
 });
 
 test('write correct farmhash32 checksum', function t(assert) {
     var csum = Checksum(Checksum.Types.FarmHash32);
+
     csum.update(parts[0], parts[1], parts[2]);
-    assert.deepEqual(
-        csum.write().create(),
-        Farm32Buffer, 'farmhash32 writes correct checksum');
+    var tup = bufrw.toBufferTuple(Checksum.struct, csum);
+    var err = tup[0];
+    var buf = tup[1];
+    assert.ifError(err, 'write should not error');
+    assert.deepEqual(buf, Farm32Buffer, 'farmhash32 writes correct checksum');
+
     csum.update(uparts[0], uparts[1], uparts[2]);
-    assert.notDeepEqual(
-        csum.write().create(),
-        Farm32Buffer, 'farmhash32 rejects bad data');
+    tup = bufrw.toBufferTuple(Checksum.struct, csum);
+    err = tup[0];
+    buf = tup[1];
+    assert.ifError(err, 'write should not error');
+    assert.notDeepEqual(buf, Farm32Buffer, 'farmhash32 rejects bad data');
+
     assert.end();
 });
