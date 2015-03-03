@@ -701,6 +701,7 @@ TChannelConnection.prototype.request = function request(options, callback) {
     self.outOps[id] = new TChannelClientOp(
         req, self.channel.now(), callback);
     self.pendingCount++;
+    return req;
 };
 
 TChannelConnection.prototype.handleRequest = function handleRequest(req) {
