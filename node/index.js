@@ -398,17 +398,18 @@ function TChannelConnection(channel, socket, direction, remoteAddr) {
     self.handler = new v2.Handler(self.channel);
 
     // TODO: refactor op boundary to pass full req/res around
-    self.handler.on('call.request', function onCallRequest(req, res) {
+    self.handler.on('call.incoming.request', function onCallRequest(req) {
         var handler = self.channel.getEndpointHandler(req.name);
+        var res = self.handler.buildOutgoingResponse(req);
         self.runInOp(handler, req, res.send);
     });
 
-    self.handler.on('call.response', function onCallError(err, res) {
-        if (err) {
-            self.completeOutOp(err.originalId, err, null, null);
-        } else {
-            self.completeOutOp(res.id, null, res.arg2, res.arg3);
-        }
+    self.handler.on('call.incoming.response', function onCallError(res) {
+        self.completeOutOp(res.id, null, res.arg2, res.arg3);
+    });
+
+    self.handler.on('call.incoming.error', function onCallError(err) {
+        self.completeOutOp(err.originalId, err, null, null);
     });
 
     self.socket.setNoDelay(true);
@@ -679,9 +680,17 @@ TChannelConnection.prototype.completeOutOp = function completeOutOp(id, err, arg
     op.callback(err, arg1, arg2);
 };
 
-// send a req frame
 /* jshint maxparams:5 */
+// TODO: deprecated, callers should use .request directly
 TChannelConnection.prototype.send = function send(options, arg1, arg2, arg3, callback) {
+    var self = this;
+    var req = self.request(options, callback);
+    req.send(arg1, arg2, arg3);
+};
+/* jshint maxparams:4 */
+
+// create a request
+TChannelConnection.prototype.request = function request(options, callback) {
     var self = this;
     // TODO: use this to protect against >4Mi outstanding messages edge case
     // (e.g. zombie operation bug, incredible throughput, or simply very long
@@ -689,13 +698,12 @@ TChannelConnection.prototype.send = function send(options, arg1, arg2, arg3, cal
     // if (self.outOps[id]) {
     //  throw new Error('duplicate frame id in flight'); // TODO typed error
     // }
-
-    var id = self.handler.sendRequestFrame(options, arg1, arg2, arg3);
+    var req = self.buildOutgoingRequest(options);
+    var id = req.id;
     self.outOps[id] = new TChannelClientOp(
         options, self.channel.now(), callback);
     self.pendingCount++;
 };
-/* jshint maxparams:4 */
 
 TChannelConnection.prototype.runInOp = function runInOp(handler, options, sendResponseFrame) {
     var self = this;

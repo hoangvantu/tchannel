@@ -24,6 +24,10 @@ var TypedError = require('error/typed');
 var Duplex = require('stream').Duplex;
 var util = require('util');
 
+var TChannelOutgoingRequest = require('../reqres').OutgoingRequest;
+var TChannelOutgoingResponse = require('../reqres').OutgoingResponse;
+var TChannelIncomingRequest = require('../reqres').IncomingRequest;
+var TChannelIncomingResponse = require('../reqres').IncomingResponse;
 var v2 = require('./index');
 
 module.exports = TChannelV2Handler;
@@ -32,15 +36,6 @@ var TChannelUnhandledFrameTypeError = TypedError({
     type: 'tchannel.unhandled-frame-type',
     message: 'unhandled frame type {typeCode}',
     typeCode: null
-});
-
-var TChannelApplicationError = TypedError({
-    type: 'tchannel.application',
-    message: 'tchannel application error code {code}',
-    code: null,
-    arg1: null,
-    arg2: null,
-    arg3: null
 });
 
 function TChannelV2Handler(channel, options) {
@@ -128,31 +123,8 @@ TChannelV2Handler.prototype.handleCallRequest = function handleCallRequest(reqFr
     if (self.remoteHostPort === null) {
         return callback(new Error('call request before init request')); // TODO typed error
     }
-
-    // TODO: factor out proper object prototypes for req & res
-    var req = {
-        id: reqFrame.id,
-        tracing: reqFrame.tracing,
-        service: reqFrame.service,
-        name: String(reqFrame.body.arg1),
-        requestHeaders: reqFrame.headers,
-        arg1: reqFrame.body.arg1,
-        arg2: reqFrame.body.arg2,
-        arg3: reqFrame.body.arg3
-    };
-
-    var res = {
-        flags: 0, // TODO: streaming
-        id: reqFrame.id,
-        arg1: reqFrame.body.arg1,
-        headers: {},
-        checksum: reqFrame.body.csum.type,
-        send: function sendResponseFrame(err, res1, res2) {
-            self.sendResponseFrame(req, res, err, res1, res2);
-        }
-    };
-
-    self.emit('call.request', req, res);
+    var req = self.buildIncomingRequest(reqFrame);
+    self.emit('call.incoming.request', req);
     callback();
 };
 
@@ -161,20 +133,8 @@ TChannelV2Handler.prototype.handleCallResponse = function handleCallResponse(res
     if (self.remoteHostPort === null) {
         return callback(new Error('call response before init response')); // TODO typed error
     }
-
-    // TODO: factor out an object prototype for this
-    var res = {
-        id: resFrame.id,
-        code: resFrame.body.code,
-        arg1: resFrame.body.arg1,
-        arg2: resFrame.body.arg2,
-        arg3: resFrame.body.arg3
-    };
-    if (res.code === v2.CallResponse.Codes.OK) {
-        self.emit('call.response', null, res);
-    } else {
-        self.emit('call.response', TChannelApplicationError(res), null);
-    }
+    var res = self.buildIncomingResponse(resFrame);
+    self.emit('call.incoming.response', res);
     callback();
 };
 
@@ -191,7 +151,7 @@ TChannelV2Handler.prototype.handleError = function handleError(errFrame, callbac
         // fatal error not associated with a prior frame
         callback(err);
     } else {
-        self.emit('call.response', err, null);
+        self.emit('call.incoming.error', err, null);
         callback();
     }
 };
@@ -227,44 +187,95 @@ TChannelV2Handler.prototype.sendInitResponse = function sendInitResponse(reqFram
 };
 
 /* jshint maxparams:6 */
-TChannelV2Handler.prototype.sendRequestFrame = function sendRequestFrame(options, arg1, arg2, arg3) {
+TChannelV2Handler.prototype.sendRequestFrame = function sendRequestFrame(req, arg1, arg2, arg3) {
     var self = this;
-    var id = self.nextFrameId();
-    var flags = 0; // TODO: streaming
-    var ttl = options.timeout || 1; // TODO: better default, support for dynamic
-    var tracing = options.tracing || null; // TODO: generate
-    var service = options.service || null; // TODO: provide some sort of channel default
-    var headers = options.headers || {};
-    var csum;
-    if (options.checksum === undefined || options.checksum === null) {
-        csum = v2.Checksum.Types.FarmHash32;
-    } else {
-        csum = options.checksum;
-    }
-    var reqBody = v2.CallRequest(flags, ttl, tracing, service, headers, csum, arg1, arg2, arg3);
+    var id = req.id;
+    var reqBody = v2.CallRequest(
+        0, req.ttl, req.tracing,
+        req.service, req.headers,
+        req.checksumType,
+        arg1, arg2, arg3);
     var reqFrame = v2.Frame(id, reqBody);
     self.push(reqFrame);
     return id;
 };
 
-TChannelV2Handler.prototype.sendResponseFrame = function sendResponseFrame(req, res, err, res1, res2) {
+TChannelV2Handler.prototype.sendResponseFrame = function sendResponseFrame(res, err, res1, res2) {
     // TODO: refactor this all the way back out through the op handler calling convention
     var self = this;
     var resBody;
     if (err) {
         var errArg = isError(err) ? err.message : JSON.stringify(err); // TODO: better
         resBody = v2.CallResponse(
-            res.flags, v2.CallResponse.Codes.Error, req.tracing,
+            res.flags, v2.CallResponse.Codes.Error, res.tracing,
             res.headers, res.checksum, res.arg1, res1, errArg);
     } else {
         resBody = v2.CallResponse(
-            res.flags, v2.CallResponse.Codes.OK, req.tracing,
+            res.flags, v2.CallResponse.Codes.OK, res.tracing,
             res.headers, res.checksum, res.arg1, res1, res2);
     }
     var resFrame = v2.Frame(res.id, resBody);
     self.push(resFrame);
 };
 /* jshint maxparams:4 */
+
+TChannelV2Handler.prototype.buildOutgoingRequest = function buildOutgoingResponse(options) {
+    var self = this;
+    var id = self.nextFrameId();
+    if (!options.ttl) {
+        // TODO: better default, support for dynamic
+        options.ttl = 1;
+    }
+    // TODO: provide some sort of channel default for "service"
+    if (options.checksumType === undefined || options.checksumType === null) {
+        options.checksumType = v2.Checksum.Types.FarmHash32;
+    }
+    var req = TChannelOutgoingRequest(id, options, sendRequestFrame);
+    return req;
+    function sendRequestFrame(arg1, arg2, arg3) {
+        self.sendRequestFrame(req, arg1, arg2, arg3);
+    }
+};
+
+TChannelV2Handler.prototype.buildOutgoingResponse = function buildOutgoingResponse(req) {
+    var self = this;
+    var res = TChannelOutgoingResponse(req.id, {
+        tracing: req.tracing,
+        headers: {},
+        checksumType: req.checksumType,
+        name: req.name,
+    }, sendResponseFrame);
+    return res;
+    function sendResponseFrame(err, res1, res2) {
+        self.sendResponseFrame(res, err, res1, res2);
+    }
+};
+
+TChannelV2Handler.prototype.buildIncomingRequest = function buildIncomingRequest(reqFrame) {
+    var name = String(reqFrame.body.arg1);
+    var req = TChannelIncomingRequest(reqFrame.id, {
+        ttl: reqFrame.ttl,
+        tracing: reqFrame.tracing,
+        service: reqFrame.service,
+        headers: reqFrame.headers,
+        checksumType: reqFrame.body.csum.type,
+        name: name,
+        arg2: reqFrame.body.arg2,
+        arg3: reqFrame.body.arg3
+    });
+    return req;
+};
+
+TChannelV2Handler.prototype.buildIncomingResponse = function buildIncomingRequest(resFrame) {
+    var res = TChannelIncomingResponse(resFrame.id, {
+        id: resFrame.id,
+        code: resFrame.body.code,
+        arg1: resFrame.body.arg1,
+        arg2: resFrame.body.arg2,
+        arg3: resFrame.body.arg3
+    });
+    return res;
+};
 
 function isError(obj) {
     return typeof obj === 'object' && (
