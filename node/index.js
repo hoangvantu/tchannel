@@ -586,7 +586,7 @@ TChannelConnection.prototype.checkOutOpsForTimeout = function checkOutOpsForTime
                 });
             continue;
         }
-        var timeout = op.options.timeout || self.channel.reqTimeoutDefault;
+        var timeout = op.req.ttl || self.channel.reqTimeoutDefault;
         var duration = now - op.start;
         if (duration > timeout) {
             delete ops[opKey];
@@ -699,7 +699,7 @@ TChannelConnection.prototype.request = function request(options, callback) {
     var req = self.buildOutgoingRequest(options);
     var id = req.id;
     self.outOps[id] = new TChannelClientOp(
-        options, self.channel.now(), callback);
+        req, self.channel.now(), callback);
     self.pendingCount++;
 };
 
@@ -727,9 +727,9 @@ TChannelConnection.prototype.handleRequest = function handleRequest(req) {
 };
 
 /* jshint maxparams:6 */
-function TChannelServerOp(connection, handler, start, options, callback) {
+function TChannelServerOp(connection, handler, start, req, callback) {
     var self = this;
-    self.options = options;
+    self.req = req;
     self.connection = connection;
     self.logger = connection.logger;
     self.handler = handler;
@@ -738,7 +738,7 @@ function TChannelServerOp(connection, handler, start, options, callback) {
     self.callback = callback;
     self.responseSent = false;
     process.nextTick(function runHandler() {
-        self.handler(self.options.arg2, self.options.arg3, connection.remoteName, sendResponse);
+        self.handler(self.req.arg2, self.req.arg3, connection.remoteName, sendResponse);
     });
     function sendResponse(err, res1, res2) {
         self.sendResponse(err, res1, res2);
@@ -761,9 +761,9 @@ TChannelServerOp.prototype.sendResponse = function sendResponse(err, res1, res2)
     self.callback(err, res1, res2);
 };
 
-function TChannelClientOp(options, start, callback) {
+function TChannelClientOp(req, start, callback) {
     var self = this;
-    self.options = options;
+    self.req = req;
     self.callback = callback;
     self.start = start;
     self.timedOut = false;
