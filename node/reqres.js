@@ -73,6 +73,7 @@ function TChannelIncomingRequest(id, options) {
     }
     options = options || {};
     var self = this;
+    self.remoteAddr = null;
     self.id = id || 0;
     self.ttl = options.ttl || 0;
     self.tracing = options.tracing || emptyTracing;
