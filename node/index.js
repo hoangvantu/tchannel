@@ -30,6 +30,7 @@ var net = require('net');
 var format = require('util').format;
 var inspect = require('util').inspect;
 var Spy = require('./v2/spy');
+var TRouter = require('./trouter');
 
 var dumpEnabled = /\btchannel_dump\b/.test(process.env.NODE_DEBUG || '');
 
@@ -771,3 +772,4 @@ function TChannelClientOp(req, start, callback) {
 }
 
 module.exports = TChannel;
+module.exports.Router = TRouter;
