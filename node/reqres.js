@@ -38,11 +38,18 @@ function TChannelOutgoingRequest(id, options, sendFrame) {
     self.headers = options.headers || {};
     self.checksumType = options.checksumType || 0;
     self.sendFrame = sendFrame;
+    self.sent = false;
 }
 
 TChannelOutgoingRequest.prototype.send = function send(arg1, arg2, arg3) {
     var self = this;
-    self.sendFrame(arg1, arg2, arg3);
+    if (self.sent) {
+        self.emit('error', new Error('request already sent'));
+    } else {
+        self.sent = true;
+        self.sendFrame(arg1, arg2, arg3);
+        self.emit('end');
+    }
 };
 
 function TChannelOutgoingResponse(id, options, sendFrame) {
@@ -60,11 +67,18 @@ function TChannelOutgoingResponse(id, options, sendFrame) {
     self.arg2 = options.arg2 || emptyBuffer;
     self.arg3 = options.arg3 || emptyBuffer;
     self.sendFrame = sendFrame;
+    self.sent = false;
 }
 
 TChannelOutgoingResponse.prototype.send = function send(err, res1, res2) {
     var self = this;
-    self.sendFrame(err, res1, res2);
+    if (self.sent) {
+        self.emit('error', new Error('response already sent'));
+    } else {
+        self.sent = true;
+        self.sendFrame(err, res1, res2);
+        self.emit('end');
+    }
 };
 
 function TChannelIncomingRequest(id, options) {
