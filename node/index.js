@@ -709,40 +709,45 @@ TChannelConnection.prototype.handleRequest = function handleRequest(req) {
     var id = req.id;
     self.inPending++;
     var op = self.inOps[id] = new TChannelServerOp(self,
-        function channelHandleRequest(req, callback) {
-            self.channel.handleRequest(req, callback);
-        },
-        self.channel.now(), req, opDone);
+        self.channel.now(), req, res);
 
-    function opDone(err, res1, res2) {
+    var done = false;
+    process.nextTick(function runHandler() {
+        self.channel.handleRequest(req, function handlerCallback(err, res1, res2) {
+            res.send(err, res1, res2);
+        });
+    });
+
+    res.on('end', opDone);
+    res.on('error', function onResError(err) {
+        self.logger.error(err);
+        opDone();
+    });
+
+    function opDone() {
+        if (done) return;
+        done = true;
         if (self.inOps[id] !== op) {
-            self.logger.warn('attempt to send frame for mismatched operation', {
+            self.logger.warn('mismatched opDone callback', {
                 hostPort: self.channel.hostPort,
                 opId: id
             });
             return;
         }
-        res.send(err, res1, res2);
         delete self.inOps[id];
         self.inPending--;
     }
 };
 
-/* jshint maxparams:6 */
-function TChannelServerOp(connection, handler, start, req, callback) {
+function TChannelServerOp(connection, start, req, res) {
     var self = this;
     self.req = req;
+    self.res = res;
     self.connection = connection;
     self.logger = connection.logger;
-    self.handler = handler;
     self.timedOut = false;
     self.start = start;
-    self.callback = callback;
-    process.nextTick(function runHandler() {
-        self.handler(self.req, self.callback);
-    });
 }
-/* jshint maxparams:4 */
 
 function TChannelClientOp(req, start, callback) {
     var self = this;
