@@ -738,30 +738,11 @@ function TChannelServerOp(connection, handler, start, req, callback) {
     self.timedOut = false;
     self.start = start;
     self.callback = callback;
-    self.responseSent = false;
     process.nextTick(function runHandler() {
-        self.handler(self.req, sendResponse);
+        self.handler(self.req, self.callback);
     });
-    function sendResponse(err, res1, res2) {
-        self.sendResponse(err, res1, res2);
-    }
 }
 /* jshint maxparams:4 */
-
-TChannelServerOp.prototype.sendResponse = function sendResponse(err, res1, res2) {
-    var self = this;
-    if (self.responseSent) {
-        self.logger.error('response already sent', {
-            err: err,
-            res1: res1,
-            res2: res2
-        });
-        return;
-    }
-    self.responseSent = true;
-    // TODO: observability hook for handler errors
-    self.callback(err, res1, res2);
-};
 
 function TChannelClientOp(req, start, callback) {
     var self = this;
