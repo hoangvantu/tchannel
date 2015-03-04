@@ -694,7 +694,7 @@ TChannelConnection.prototype.request = function request(options, callback) {
     // if (self.outOps[id]) {
     //  throw new Error('duplicate frame id in flight'); // TODO typed error
     // }
-    var req = self.buildOutgoingRequest(options);
+    var req = self.handler.buildOutgoingRequest(options);
     var id = req.id;
     self.outOps[id] = new TChannelClientOp(
         req, self.channel.now(), callback);
